@@ -10,7 +10,7 @@ pipeline {
         SONAR_ORG = 'devsecopsguruwebapp'
         SONAR_URL = 'https://sonarcloud.io'
         DOCKER_IMAGE = 'asg'
-        DOCKER_REGISTRY = 'https://593793045402.dkr.ecr.us-west-2.amazonaws.com'
+        DOCKER_REGISTRY = '593793045402.dkr.ecr.us-west-2.amazonaws.com'
         AWS_REGION = 'us-west-2'
     }
 
