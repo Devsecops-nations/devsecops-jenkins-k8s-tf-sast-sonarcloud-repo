@@ -1,42 +1,64 @@
 pipeline {
     agent any
 
-    // Tools configuration
-    tools { 
-        maven 'Maven_3.5.2'  // Use the specified Maven version
+    tools {
+        maven 'Maven_3.5.2'
     }
 
     environment {
         SONAR_PROJECT_KEY = 'devsecopsguruwebapp'
-        SONAR_ORGANIZATION = 'devsecopsguruwebapp'
-        SONAR_HOST_URL = 'https://sonarcloud.io'
-        SNYK_TOKEN_ID = 'SNYK_TOKEN' // ID for Snyk credentials
+        SONAR_ORG = 'devsecopsguruwebapp'
+        SONAR_URL = 'https://sonarcloud.io'
+        DOCKER_IMAGE = 'asg'
+        DOCKER_REGISTRY = 'https://145988340565.dkr.ecr.us-west-2.amazonaws.com'
     }
 
     stages {
-
+        // Stage 1: Compile and Run Sonar Analysis
         stage('Compile and Run Sonar Analysis') {
             steps {
-                echo 'Running SonarQube Analysis...'
+                echo 'Starting SonarQube Analysis...'
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.organization=${SONAR_ORGANIZATION} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                            -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+                            -Dsonar.organization=$SONAR_ORG \
+                            -Dsonar.host.url=$SONAR_URL \
+                            -Dsonar.token=$SONAR_TOKEN
                     '''
                 }
             }
         }
 
+        // Stage 2: Run Software Composition Analysis (SCA) using Snyk
         stage('Run SCA Analysis Using Snyk') {
             steps {
-                echo 'Running Snyk Security Analysis...'
-                withCredentials([string(credentialsId: SNYK_TOKEN_ID, variable: 'SNYK_TOKEN')]) {
+                echo 'Starting Snyk Analysis...'
+                withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+                    sh 'mvn snyk:test -fn'
+                }
+            }
+        }
+
+        // Stage 3: Build Docker Image
+        stage('Build') {
+            steps {
+                echo 'Building Docker Image...'
+                script {
+                    app = docker.build("$DOCKER_IMAGE")
+                }
+            }
+        }
+
+        // Stage 4: Push Docker Image
+        stage('Push') {
+            steps {
+                echo 'Pushing Docker Image to Registry...'
+                withCredentials([string(credentialsId: 'DOCKER_TOKEN', variable: 'DOCKER_TOKEN')]) {
                     sh '''
-                        mvn snyk:test -fn \
-                        -Dsnyk.token=${SNYK_TOKEN}
+                        echo $DOCKER_TOKEN | docker login $DOCKER_REGISTRY --username AWS --password-stdin
+                        docker tag $DOCKER_IMAGE:latest $DOCKER_REGISTRY/$DOCKER_IMAGE:latest
+                        docker push $DOCKER_REGISTRY/$DOCKER_IMAGE:latest
                     '''
                 }
             }
@@ -45,14 +67,13 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up workspace...'
-            cleanWs() // Clean workspace after build completion
+            echo 'Pipeline execution completed.'
         }
         success {
-            echo 'Pipeline executed successfully!'
+            echo 'Pipeline executed successfully.'
         }
         failure {
-            echo 'Pipeline execution failed. Check the logs for details.'
+            echo 'Pipeline execution failed.'
         }
     }
 }
