@@ -1,23 +1,58 @@
 pipeline {
-  agent any
-  tools { 
-        maven 'Maven_3.5.2'  
+    agent any
+
+    // Tools configuration
+    tools { 
+        maven 'Maven_3.5.2'  // Use the specified Maven version
     }
-   stages{
-    stage('CompileandRunSonarAnalysis') {
-            steps {	
-		sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=devsecopsguruwebapp -Dsonar.organization=devsecopsguruwebapp -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=a8cb76677dab7fb1cb7473a642e7e3b1df2c13fb'
-			}
-        } 
-  }
-}
+
+    environment {
+        SONAR_PROJECT_KEY = 'devsecopsguruwebapp'
+        SONAR_ORGANIZATION = 'devsecopsguruwebapp'
+        SONAR_HOST_URL = 'https://sonarcloud.io'
+        SNYK_TOKEN_ID = 'SNYK_TOKEN' // ID for Snyk credentials
     }
-    stage('RunSCAAnalysisUsingSnyk') {
-            steps {		
-				withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
-					sh 'mvn snyk:test -fn'
-				}
-			}
-    }		
-  }
+
+    stages {
+
+        stage('Compile and Run Sonar Analysis') {
+            steps {
+                echo 'Running SonarQube Analysis...'
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        mvn clean verify sonar:sonar \
+                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                        -Dsonar.organization=${SONAR_ORGANIZATION} \
+                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                        -Dsonar.login=${SONAR_TOKEN}
+                    '''
+                }
+            }
+        }
+
+        stage('Run SCA Analysis Using Snyk') {
+            steps {
+                echo 'Running Snyk Security Analysis...'
+                withCredentials([string(credentialsId: SNYK_TOKEN_ID, variable: 'SNYK_TOKEN')]) {
+                    sh '''
+                        mvn snyk:test -fn \
+                        -Dsnyk.token=${SNYK_TOKEN}
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs() // Clean workspace after build completion
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline execution failed. Check the logs for details.'
+        }
+    }
 }
