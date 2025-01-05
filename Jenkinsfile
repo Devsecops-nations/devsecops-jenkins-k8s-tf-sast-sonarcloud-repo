@@ -10,7 +10,8 @@ pipeline {
         SONAR_ORG = 'devsecopsguruwebapp'
         SONAR_URL = 'https://sonarcloud.io'
         DOCKER_IMAGE = 'asg'
-        DOCKER_REGISTRY = 'https://145988340565.dkr.ecr.us-west-2.amazonaws.com'
+        DOCKER_REGISTRY = 'https://593793045402.dkr.ecr.us-west-2.amazonaws.com'
+        AWS_REGION = 'us-west-2'
     }
 
     stages {
@@ -50,14 +51,19 @@ pipeline {
             }
         }
 
-        // Stage 4: Push Docker Image
+        // Stage 4: Push Docker Image to ECR
         stage('Push') {
             steps {
-                echo 'Pushing Docker Image to Registry...'
-                withCredentials([string(credentialsId: 'DOCKER_TOKEN', variable: 'DOCKER_TOKEN')]) {
+                echo 'Pushing Docker Image to Amazon ECR...'
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_CREDENTIALS']]) {
                     sh '''
-                        echo $DOCKER_TOKEN | docker login $DOCKER_REGISTRY --username AWS --password-stdin
+                        # Authenticate Docker with ECR using AWS CLI
+                        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+
+                        # Tag the Docker image
                         docker tag $DOCKER_IMAGE:latest $DOCKER_REGISTRY/$DOCKER_IMAGE:latest
+
+                        # Push the Docker image to ECR
                         docker push $DOCKER_REGISTRY/$DOCKER_IMAGE:latest
                     '''
                 }
